@@ -1,0 +1,20 @@
+{
+  "target": "anomaly_summer_temp",
+  "feature_set": "micro",
+  "model_name": "XGBoost",
+  "model_checksum": "bdb8917edf2b6d745c8d0159286d5ffe9e9b0d543da5f4c0b78a38ab57915ee9",
+  "training_fingerprint": "32b0e8a2b74fcfe8d3d6adba787ae92adb5d878755b6ddd7da01e064cb8f32f6",
+  "row_count": 5219,
+  "feature_count": 7,
+  "feature_names": [
+    "GVI",
+    "Canyon_Ratio",
+    "IGVI",
+    "FVEI",
+    "SEI",
+    "VTV",
+    "WVI"
+  ],
+  "cache_file": "C:\\Users\\palmc\\Desktop\\LST_Study_PalmCity\\analysis\\modeling\\explainability\\cache\\32b0e8a2b74f_20260930T070140Z\\spatial\\micro_summer.npz",
+  "explanation_method": "SHAP TreeExplainer; tree-path-dependent background"
+}

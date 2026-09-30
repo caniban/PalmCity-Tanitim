@@ -1,0 +1,29 @@
+{
+  "model_name": "XGBoost",
+  "feature_set": "macro_micro",
+  "features": [
+    "GVI",
+    "Canyon_Ratio",
+    "IGVI",
+    "FVEI",
+    "SEI",
+    "VTV",
+    "WVI",
+    "latitude",
+    "longitude",
+    "lat_sq",
+    "lon_sq",
+    "lat_lon"
+  ],
+  "target": "anomaly_summer_temp",
+  "training_scope": "all filtered records; interpretation maps only",
+  "parameters": {
+    "learning_rate": 0.05,
+    "max_depth": 7,
+    "n_estimators": 100,
+    "random_state": 42,
+    "objective": "reg:squarederror",
+    "n_jobs": 1
+  },
+  "model_checksum": "cc6ad4df8d4318d7b4b3109aa76307ca798ef6dc59bcb0c3567318238d049955"
+}

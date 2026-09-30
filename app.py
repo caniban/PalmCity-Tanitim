@@ -2,9 +2,14 @@ import os
 import glob
 import re
 import pandas as pd
+import numpy as np
 import plotly.express as px
+import matplotlib.pyplot as plt
+import shap
 from PIL import Image
 import streamlit as st
+import contextily
+import mapclassify
 
 # ==========================================
 # 1. SAYFA YAPILANDIRMASI VE ÖZEL CSS
@@ -125,7 +130,6 @@ def show_image(base_name, caption=None, use_container_width=True):
 # ==========================================
 # 3. VERİ VERİTABANI & TABLOLAR
 # ==========================================
-
 # 1. Cityscapes Sınıfları
 df_cityscapes = pd.DataFrame([
     {
@@ -216,367 +220,55 @@ df_ade20k = pd.DataFrame([
 
 # 3. Arazi Çalışmaları Dağılımı Tablosu
 df_arazi = pd.DataFrame([
-    {
-        "No": 1,
-        "Tarih": "12.11.2024",
-        "Mahalle / İlçe": "Çiftlikköy / Yenişehir",
-        "Arazi Kullanımı & Mimari Tipoloji": (
-            "Plansız Yerleşim ve Planlı Apartman"
-        ),
-        "Görüntü Sayısı": 163,
-    },
-    {
-        "No": 2,
-        "Tarih": "25.11.2024",
-        "Mahalle / İlçe": "Çiftlikköy / Yenişehir",
-        "Arazi Kullanımı & Mimari Tipoloji": (
-            "Planlı Apartman ve Planlı Rezidans"
-        ),
-        "Görüntü Sayısı": 148,
-    },
-    {
-        "No": 3,
-        "Tarih": "26.11.2024",
-        "Mahalle / İlçe": "Viranşehir / Mezitli",
-        "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Sahil",
-        "Görüntü Sayısı": 224,
-    },
-    {
-        "No": 4,
-        "Tarih": "28.11.2024",
-        "Mahalle / İlçe": "Çiftlikköy / Yenişehir",
-        "Arazi Kullanımı & Mimari Tipoloji": (
-            "Planlı Apartman ve Planlı Rezidans"
-        ),
-        "Görüntü Sayısı": 247,
-    },
-    {
-        "No": 5,
-        "Tarih": "29.11.2024",
-        "Mahalle / İlçe": "İnönü-Gazi-Palmiye / Yenişehir",
-        "Arazi Kullanımı & Mimari Tipoloji": "Çarşı ve Planlı Apartman",
-        "Görüntü Sayısı": 365,
-    },
-    {
-        "No": 6,
-        "Tarih": "05.12.2024",
-        "Mahalle / İlçe": "Mersin Ana Arterler",
-        "Arazi Kullanımı & Mimari Tipoloji": "Tüm Tipolojiler (Motosiklet)",
-        "Görüntü Sayısı": 607,
-    },
-    {
-        "No": 7,
-        "Tarih": "12.01.2025",
-        "Mahalle / İlçe": "Hürriyet / Yenişehir",
-        "Arazi Kullanımı & Mimari Tipoloji": (
-            "Planlı Apartman ve Plansız Yerleşim"
-        ),
-        "Görüntü Sayısı": 391,
-    },
-    {
-        "No": 8,
-        "Tarih": "08.03.2025",
-        "Mahalle / İlçe": "Çankaya / Akdeniz",
-        "Arazi Kullanımı & Mimari Tipoloji": "Çarşı ve Plansız Yerleşim",
-        "Görüntü Sayısı": 655,
-    },
-    {
-        "No": 9,
-        "Tarih": "27.04.2025",
-        "Mahalle / İlçe": "Sağlık / Toroslar",
-        "Arazi Kullanımı & Mimari Tipoloji": "Plansız Yerleşim",
-        "Görüntü Sayısı": 714,
-    },
-    {
-        "No": 10,
-        "Tarih": "30.07.2025",
-        "Mahalle / İlçe": "Çukurova / Toroslar",
-        "Arazi Kullanımı & Mimari Tipoloji": "Plansız Yerleşim",
-        "Görüntü Sayısı": 746,
-    },
-    {
-        "No": 11,
-        "Tarih": "24.08.2025",
-        "Mahalle / İlçe": "Akdeniz / Mezitli",
-        "Arazi Kullanımı & Mimari Tipoloji": (
-            "Planlı Apartman ve Planlı Rezidans"
-        ),
-        "Görüntü Sayısı": 393,
-    },
-    {
-        "No": 12,
-        "Tarih": "02.09.2025",
-        "Mahalle / İlçe": "Güvenevler / Yenişehir",
-        "Arazi Kullanımı & Mimari Tipoloji": "Çarşı ve Planlı Apartman",
-        "Görüntü Sayısı": 310,
-    },
-    {
-        "No": 13,
-        "Tarih": "28.09.2025",
-        "Mahalle / İlçe": "Menderes / Mezitli",
-        "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Sahil",
-        "Görüntü Sayısı": 271,
-    },
+    {"No": 1, "Tarih": "12.11.2024", "Mahalle / İlçe": "Çiftlikköy / Yenişehir", "Arazi Kullanımı & Mimari Tipoloji": "Plansız Yerleşim ve Planlı Apartman", "Görüntü Sayısı": 163},
+    {"No": 2, "Tarih": "25.11.2024", "Mahalle / İlçe": "Çiftlikköy / Yenişehir", "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Planlı Rezidans", "Görüntü Sayısı": 148},
+    {"No": 3, "Tarih": "26.11.2024", "Mahalle / İlçe": "Viranşehir / Mezitli", "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Sahil", "Görüntü Sayısı": 224},
+    {"No": 4, "Tarih": "28.11.2024", "Mahalle / İlçe": "Çiftlikköy / Yenişehir", "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Planlı Rezidans", "Görüntü Sayısı": 247},
+    {"No": 5, "Tarih": "29.11.2024", "Mahalle / İlçe": "İnönü-Gazi-Palmiye / Yenişehir", "Arazi Kullanımı & Mimari Tipoloji": "Çarşı ve Planlı Apartman", "Görüntü Sayısı": 365},
+    {"No": 6, "Tarih": "05.12.2024", "Mahalle / İlçe": "Mersin Ana Arterler", "Arazi Kullanımı & Mimari Tipoloji": "Tüm Tipolojiler (Motosiklet)", "Görüntü Sayısı": 607},
+    {"No": 7, "Tarih": "12.01.2025", "Mahalle / İlçe": "Hürriyet / Yenişehir", "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Plansız Yerleşim", "Görüntü Sayısı": 391},
+    {"No": 8, "Tarih": "08.03.2025", "Mahalle / İlçe": "Çankaya / Akdeniz", "Arazi Kullanımı & Mimari Tipoloji": "Çarşı ve Plansız Yerleşim", "Görüntü Sayısı": 655},
+    {"No": 9, "Tarih": "27.04.2025", "Mahalle / İlçe": "Sağlık / Toroslar", "Arazi Kullanımı & Mimari Tipoloji": "Plansız Yerleşim", "Görüntü Sayısı": 714},
+    {"No": 10, "Tarih": "30.07.2025", "Mahalle / İlçe": "Çukurova / Toroslar", "Arazi Kullanımı & Mimari Tipoloji": "Plansız Yerleşim", "Görüntü Sayısı": 746},
+    {"No": 11, "Tarih": "24.08.2025", "Mahalle / İlçe": "Akdeniz / Mezitli", "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Planlı Rezidans", "Görüntü Sayısı": 393},
+    {"No": 12, "Tarih": "02.09.2025", "Mahalle / İlçe": "Güvenevler / Yenişehir", "Arazi Kullanımı & Mimari Tipoloji": "Çarşı ve Planlı Apartman", "Görüntü Sayısı": 310},
+    {"No": 13, "Tarih": "28.09.2025", "Mahalle / İlçe": "Menderes / Mezitli", "Arazi Kullanımı & Mimari Tipoloji": "Planlı Apartman ve Sahil", "Görüntü Sayısı": 271},
 ])
 
 # 4. PalmCity 32 Semantik Sınıf Listesi
 df_classes = pd.DataFrame([
-    {
-        "ID": 1,
-        "İngilizce Ad": "Road",
-        "Türkçe Ad": "Yol",
-        "Kategori": "Düz Yüzey",
-        "RGB Renk koda": "rgb(128, 64, 128)",
-        "HEX": "#804080",
-    },
-    {
-        "ID": 2,
-        "İngilizce Ad": "Sidewalk",
-        "Türkçe Ad": "Kaldırım",
-        "Kategori": "Düz Yüzey",
-        "RGB Renk koda": "rgb(244, 35, 232)",
-        "HEX": "#F423E8",
-    },
-    {
-        "ID": 3,
-        "İngilizce Ad": "Parking Lot",
-        "Türkçe Ad": "Otopark Alanı",
-        "Kategori": "Düz Yüzey",
-        "RGB Renk koda": "rgb(250, 170, 160)",
-        "HEX": "#FAAAA0",
-    },
-    {
-        "ID": 4,
-        "İngilizce Ad": "Parking Barrier",
-        "Türkçe Ad": "Otopark Bariyeri",
-        "Kategori": "Kent Mobilyası",
-        "RGB Renk koda": "rgb(255, 129, 0)",
-        "HEX": "#FF8100",
-    },
-    {
-        "ID": 5,
-        "İngilizce Ad": "Soil",
-        "Türkçe Ad": "Toprak / Zemin",
-        "Kategori": "Doğa",
-        "RGB Renk koda": "rgb(192, 182, 154)",
-        "HEX": "#C0B69A",
-    },
-    {
-        "ID": 6,
-        "İngilizce Ad": "Pedestrian",
-        "Türkçe Ad": "Yaya",
-        "Kategori": "İnsan",
-        "RGB Renk koda": "rgb(220, 20, 60)",
-        "HEX": "#DC143C",
-    },
-    {
-        "ID": 7,
-        "İngilizce Ad": "Driver",
-        "Türkçe Ad": "Sürücü / Binici",
-        "Kategori": "İnsan",
-        "RGB Renk koda": "rgb(255, 0, 0)",
-        "HEX": "#FF0000",
-    },
-    {
-        "ID": 8,
-        "İngilizce Ad": "Car",
-        "Türkçe Ad": "Otomobil",
-        "Kategori": "Taşıt",
-        "RGB Renk koda": "rgb(0, 0, 142)",
-        "HEX": "#00008E",
-    },
-    {
-        "ID": 9,
-        "İngilizce Ad": "Truck",
-        "Türkçe Ad": "Kamyon",
-        "Kategori": "Taşıt",
-        "RGB Renk koda": "rgb(0, 0, 70)",
-        "HEX": "#000046",
-    },
-    {
-        "ID": 10,
-        "İngilizce Ad": "Bus",
-        "Türkçe Ad": "Otobüs",
-        "Kategori": "Taşıt",
-        "RGB Renk koda": "rgb(0, 60, 100)",
-        "HEX": "#003C64",
-    },
-    {
-        "ID": 11,
-        "İngilizce Ad": "Motorbike",
-        "Türkçe Ad": "Motosiklet",
-        "Kategori": "Taşıt",
-        "RGB Renk koda": "rgb(0, 0, 230)",
-        "HEX": "#0000E6",
-    },
-    {
-        "ID": 12,
-        "İngilizce Ad": "Bicycle",
-        "Türkçe Ad": "Bisiklet",
-        "Kategori": "Taşıt",
-        "RGB Renk koda": "rgb(119, 11, 32)",
-        "HEX": "#770B20",
-    },
-    {
-        "ID": 13,
-        "İngilizce Ad": "Traffic Light",
-        "Türkçe Ad": "Trafik Işığı",
-        "Kategori": "Nesne",
-        "RGB Renk koda": "rgb(250, 170, 30)",
-        "HEX": "#FAAA1E",
-    },
-    {
-        "ID": 14,
-        "İngilizce Ad": "Traffic Sign",
-        "Türkçe Ad": "Trafik Levhası",
-        "Kategori": "Nesne",
-        "RGB Renk koda": "rgb(220, 220, 0)",
-        "HEX": "#DCDC00",
-    },
-    {
-        "ID": 15,
-        "İngilizce Ad": "Pole",
-        "Türkçe Ad": "Direk",
-        "Kategori": "Nesne",
-        "RGB Renk koda": "rgb(153, 153, 153)",
-        "HEX": "#999999",
-    },
-    {
-        "ID": 16,
-        "İngilizce Ad": "Garbage Box",
-        "Türkçe Ad": "Çöp Kutusu / Konteyner",
-        "Kategori": "Kent Mobilyası",
-        "RGB Renk koda": "rgb(137, 145, 169)",
-        "HEX": "#8991A9",
-    },
-    {
-        "ID": 17,
-        "İngilizce Ad": "Sitting Bench",
-        "Türkçe Ad": "Oturma Bankı",
-        "Kategori": "Kent Mobilyası",
-        "RGB Renk koda": "rgb(145, 161, 153)",
-        "HEX": "#91A199",
-    },
-    {
-        "ID": 18,
-        "İngilizce Ad": "Infrastructure Cover",
-        "Türkçe Ad": "Altyapı Kapağı (Rögar)",
-        "Kategori": "Altyapı",
-        "RGB Renk koda": "rgb(74, 68, 42)",
-        "HEX": "#4A442A",
-    },
-    {
-        "ID": 19,
-        "İngilizce Ad": "Infrastructure Box",
-        "Türkçe Ad": "Altyapı Kutusu / Pano",
-        "Kategori": "Altyapı",
-        "RGB Renk koda": "rgb(54, 95, 145)",
-        "HEX": "#365F91",
-    },
-    {
-        "ID": 20,
-        "İngilizce Ad": "Building",
-        "Türkçe Ad": "Bina",
-        "Kategori": "İnşa Edilmiş",
-        "RGB Renk koda": "rgb(70, 70, 70)",
-        "HEX": "#464646",
-    },
-    {
-        "ID": 21,
-        "İngilizce Ad": "Wall",
-        "Türkçe Ad": "Duvar",
-        "Kategori": "İnşa Edilmiş",
-        "RGB Renk koda": "rgb(102, 102, 156)",
-        "HEX": "#66669C",
-    },
-    {
-        "ID": 22,
-        "İngilizce Ad": "Fence",
-        "Türkçe Ad": "Çit",
-        "Kategori": "İnşa Edilmiş",
-        "RGB Renk koda": "rgb(190, 153, 153)",
-        "HEX": "#BE9999",
-    },
-    {
-        "ID": 23,
-        "İngilizce Ad": "Guardrail",
-        "Türkçe Ad": "Korkuluk / Otobariyer",
-        "Kategori": "İnşa Edilmiş",
-        "RGB Renk koda": "rgb(180, 165, 180)",
-        "HEX": "#B4A5B4",
-    },
-    {
-        "ID": 24,
-        "İngilizce Ad": "Bridge / Tunnel",
-        "Türkçe Ad": "Köprü / Tünel",
-        "Kategori": "İnşa Edilmiş",
-        "RGB Renk koda": "rgb(150, 100, 100)",
-        "HEX": "#966464",
-    },
-    {
-        "ID": 25,
-        "İngilizce Ad": "Vegetation",
-        "Türkçe Ad": "Bitki Örtüsü / Ağaç",
-        "Kategori": "Doğa",
-        "RGB Renk koda": "rgb(107, 142, 35)",
-        "HEX": "#6B8E23",
-    },
-    {
-        "ID": 26,
-        "İngilizce Ad": "Terrain",
-        "Türkçe Ad": "Arazi / Çim",
-        "Kategori": "Doğa",
-        "RGB Renk koda": "rgb(152, 251, 152)",
-        "HEX": "#98FB98",
-    },
-    {
-        "ID": 27,
-        "İngilizce Ad": "Sky",
-        "Türkçe Ad": "Gökyüzü",
-        "Kategori": "Gökyüzü",
-        "RGB Renk koda": "rgb(70, 130, 180)",
-        "HEX": "#4682B4",
-    },
-    {
-        "ID": 28,
-        "İngilizce Ad": "Water",
-        "Türkçe Ad": "Deniz / Su Yüzeyi",
-        "Kategori": "Doğa",
-        "RGB Renk koda": "rgb(0, 100, 200)",
-        "HEX": "#0064C8",
-    },
-    {
-        "ID": 29,
-        "İngilizce Ad": "Operator Shadow",
-        "Türkçe Ad": "Operatör Gölgesi",
-        "Kategori": "Ego / Özel",
-        "RGB Renk koda": "rgb(60, 60, 60)",
-        "HEX": "#3C3C3C",
-    },
-    {
-        "ID": 30,
-        "İngilizce Ad": "Operator Body",
-        "Türkçe Ad": "Operatör Vücudu",
-        "Kategori": "Ego / Özel",
-        "RGB Renk koda": "rgb(40, 40, 40)",
-        "HEX": "#282828",
-    },
-    {
-        "ID": 31,
-        "İngilizce Ad": "Stairs",
-        "Türkçe Ad": "Merdiven",
-        "Kategori": "İnşa Edilmiş",
-        "RGB Renk koda": "rgb(200, 200, 150)",
-        "HEX": "#C8C896",
-    },
-    {
-        "ID": 32,
-        "İngilizce Ad": "Void / Unlabeled",
-        "Türkçe Ad": "Boş / Etiketsiz",
-        "Kategori": "Void",
-        "RGB Renk koda": "rgb(0, 0, 0)",
-        "HEX": "#000000",
-    },
+    {"ID": 1, "İngilizce Ad": "Road", "Türkçe Ad": "Yol", "Kategori": "Düz Yüzey", "RGB Renk koda": "rgb(128, 64, 128)", "HEX": "#804080"},
+    {"ID": 2, "İngilizce Ad": "Sidewalk", "Türkçe Ad": "Kaldırım", "Kategori": "Düz Yüzey", "RGB Renk koda": "rgb(244, 35, 232)", "HEX": "#F423E8"},
+    {"ID": 3, "İngilizce Ad": "Parking Lot", "Türkçe Ad": "Otopark Alanı", "Kategori": "Düz Yüzey", "RGB Renk koda": "rgb(250, 170, 160)", "HEX": "#FAAAA0"},
+    {"ID": 4, "İngilizce Ad": "Parking Barrier", "Türkçe Ad": "Otopark Bariyeri", "Kategori": "Kent Mobilyası", "RGB Renk koda": "rgb(255, 129, 0)", "HEX": "#FF8100"},
+    {"ID": 5, "İngilizce Ad": "Soil", "Türkçe Ad": "Toprak / Zemin", "Kategori": "Doğa", "RGB Renk koda": "rgb(192, 182, 154)", "HEX": "#C0B69A"},
+    {"ID": 6, "İngilizce Ad": "Pedestrian", "Türkçe Ad": "Yaya", "Kategori": "İnsan", "RGB Renk koda": "rgb(220, 20, 60)", "HEX": "#DC143C"},
+    {"ID": 7, "İngilizce Ad": "Driver", "Türkçe Ad": "Sürücü / Binici", "Kategori": "İnsan", "RGB Renk koda": "rgb(255, 0, 0)", "HEX": "#FF0000"},
+    {"ID": 8, "İngilizce Ad": "Car", "Türkçe Ad": "Otomobil", "Kategori": "Taşıt", "RGB Renk koda": "rgb(0, 0, 142)", "HEX": "#00008E"},
+    {"ID": 9, "İngilizce Ad": "Truck", "Türkçe Ad": "Kamyon", "Kategori": "Taşıt", "RGB Renk koda": "rgb(0, 0, 70)", "HEX": "#000046"},
+    {"ID": 10, "İngilizce Ad": "Bus", "Türkçe Ad": "Otobüs", "Kategori": "Taşıt", "RGB Renk koda": "rgb(0, 60, 100)", "HEX": "#003C64"},
+    {"ID": 11, "İngilizce Ad": "Motorbike", "Türkçe Ad": "Motosiklet", "Kategori": "Taşıt", "RGB Renk koda": "rgb(0, 0, 230)", "HEX": "#0000E6"},
+    {"ID": 12, "İngilizce Ad": "Bicycle", "Türkçe Ad": "Bisiklet", "Kategori": "Taşıt", "RGB Renk koda": "rgb(119, 11, 32)", "HEX": "#770B20"},
+    {"ID": 13, "İngilizce Ad": "Traffic Light", "Türkçe Ad": "Trafik Işığı", "Kategori": "Nesne", "RGB Renk koda": "rgb(250, 170, 30)", "HEX": "#FAAA1E"},
+    {"ID": 14, "İngilizce Ad": "Traffic Sign", "Türkçe Ad": "Trafik Levhası", "Kategori": "Nesne", "RGB Renk koda": "rgb(220, 220, 0)", "HEX": "#DCDC00"},
+    {"ID": 15, "İngilizce Ad": "Pole", "Türkçe Ad": "Direk", "Kategori": "Nesne", "RGB Renk koda": "rgb(153, 153, 153)", "HEX": "#999999"},
+    {"ID": 16, "İngilizce Ad": "Garbage Box", "Türkçe Ad": "Çöp Kutusu / Konteyner", "Kategori": "Kent Mobilyası", "RGB Renk koda": "rgb(137, 145, 169)", "HEX": "#8991A9"},
+    {"ID": 17, "İngilizce Ad": "Sitting Bench", "Türkçe Ad": "Oturma Bankı", "Kategori": "Kent Mobilyası", "RGB Renk koda": "rgb(145, 161, 153)", "HEX": "#91A199"},
+    {"ID": 18, "İngilizce Ad": "Infrastructure Cover", "Türkçe Ad": "Altyapı Kapağı (Rögar)", "Kategori": "Altyapı", "RGB Renk koda": "rgb(74, 68, 42)", "HEX": "#4A442A"},
+    {"ID": 19, "İngilizce Ad": "Infrastructure Box", "Türkçe Ad": "Altyapı Kutusu / Pano", "Kategori": "Altyapı", "RGB Renk koda": "rgb(54, 95, 145)", "HEX": "#365F91"},
+    {"ID": 20, "İngilizce Ad": "Building", "Türkçe Ad": "Bina", "Kategori": "İnşa Edilmiş", "RGB Renk koda": "rgb(70, 70, 70)", "HEX": "#464646"},
+    {"ID": 21, "İngilizce Ad": "Wall", "Türkçe Ad": "Duvar", "Kategori": "İnşa Edilmiş", "RGB Renk koda": "rgb(102, 102, 156)", "HEX": "#66669C"},
+    {"ID": 22, "İngilizce Ad": "Fence", "Türkçe Ad": "Çit", "Kategori": "İnşa Edilmiş", "RGB Renk koda": "rgb(190, 153, 153)", "HEX": "#BE9999"},
+    {"ID": 23, "İngilizce Ad": "Guardrail", "Türkçe Ad": "Korkuluk / Otobariyer", "Kategori": "İnşa Edilmiş", "RGB Renk koda": "rgb(180, 165, 180)", "HEX": "#B4A5B4"},
+    {"ID": 24, "İngilizce Ad": "Bridge / Tunnel", "Türkçe Ad": "Köprü / Tünel", "Kategori": "İnşa Edilmiş", "RGB Renk koda": "rgb(150, 100, 100)", "HEX": "#966464"},
+    {"ID": 25, "İngilizce Ad": "Vegetation", "Türkçe Ad": "Bitki Örtüsü / Ağaç", "Kategori": "Doğa", "RGB Renk koda": "rgb(107, 142, 35)", "HEX": "#6B8E23"},
+    {"ID": 26, "İngilizce Ad": "Terrain", "Türkçe Ad": "Arazi / Çim", "Kategori": "Doğa", "RGB Renk koda": "rgb(152, 251, 152)", "HEX": "#98FB98"},
+    {"ID": 27, "İngilizce Ad": "Sky", "Türkçe Ad": "Gökyüzü", "Kategori": "Gökyüzü", "RGB Renk koda": "rgb(70, 130, 180)", "HEX": "#4682B4"},
+    {"ID": 28, "İngilizce Ad": "Water", "Türkçe Ad": "Deniz / Su Yüzeyi", "Kategori": "Doğa", "RGB Renk koda": "rgb(0, 100, 200)", "HEX": "#0064C8"},
+    {"ID": 29, "İngilizce Ad": "Operator Shadow", "Türkçe Ad": "Operatör Gölgesi", "Kategori": "Ego / Özel", "RGB Renk koda": "rgb(60, 60, 60)", "HEX": "#3C3C3C"},
+    {"ID": 30, "İngilizce Ad": "Operator Body", "Türkçe Ad": "Operatör Vücudu", "Kategori": "Ego / Özel", "RGB Renk koda": "rgb(40, 40, 40)", "HEX": "#282828"},
+    {"ID": 31, "İngilizce Ad": "Stairs", "Türkçe Ad": "Merdiven", "Kategori": "İnşa Edilmiş", "RGB Renk koda": "rgb(200, 200, 150)", "HEX": "#C8C896"},
+    {"ID": 32, "İngilizce Ad": "Void / Unlabeled", "Türkçe Ad": "Boş / Etiketsiz", "Kategori": "Void", "RGB Renk koda": "rgb(0, 0, 0)", "HEX": "#000000"},
 ])
 
 
@@ -606,295 +298,126 @@ with col_title:
 # KPI Metrik Kartları
 m1, m2, m3, m4, m5 = st.columns(5)
 with m1:
-  st.markdown(
-      """<div class="metric-card"><div class="metric-value">5.232</div><div class="metric-label">Toplam Panoramik SVI Görüntüsü</div></div>""",
-      unsafe_allow_html=True,
-  )
+  st.markdown("""<div class="metric-card"><div class="metric-value">5.232</div><div class="metric-label">Toplam Panoramik SVI Görüntüsü</div></div>""", unsafe_allow_html=True)
 with m2:
-  st.markdown(
-      """<div class="metric-card"><div class="metric-value">830</div><div class="metric-label">Etiketli Panoramik SVI</div></div>""",
-      unsafe_allow_html=True,
-  )
+  st.markdown("""<div class="metric-card"><div class="metric-value">830</div><div class="metric-label">Etiketli Panoramik SVI</div></div>""", unsafe_allow_html=True)
 with m3:
-  st.markdown(
-      """<div class="metric-card"><div class="metric-value">32</div><div class="metric-label">Semantik Sınıf</div></div>""",
-      unsafe_allow_html=True,
-  )
+  st.markdown("""<div class="metric-card"><div class="metric-value">32</div><div class="metric-label">Semantik Sınıf</div></div>""", unsafe_allow_html=True)
 with m4:
-  st.markdown(
-      """<div class="metric-card"><div class="metric-value">5</div><div class="metric-label">Kentsel Tipoloji</div></div>""",
-      unsafe_allow_html=True,
-  )
+  st.markdown("""<div class="metric-card"><div class="metric-value">5</div><div class="metric-label">Kentsel Tipoloji</div></div>""", unsafe_allow_html=True)
 with m5:
-  st.markdown(
-      """<div class="metric-card"><div class="metric-value">4</div><div class="metric-label">Merkez İlçe (Mersin)</div></div>""",
-      unsafe_allow_html=True,
-  )
+  st.markdown("""<div class="metric-card"><div class="metric-value">4</div><div class="metric-label">Merkez İlçe (Mersin)</div></div>""", unsafe_allow_html=True)
 
 st.write("")
 
 # ==========================================
 # 5. ANA SUNUM TAB'LERİ
 # ==========================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📚 1. Literatürdeki Mevcut Veri Setleri",
     "🗺️ 2. Arazi Çalışmaları & Veri Toplama",
     "🏙️ 3. Kentsel & Mimari Tipolojiler",
     "🏷️ 4. PalmCity Semantik Etiketleme",
     "📊 5. İstatistik & Analiz",
+    "📈 6. Çevresel İndisler",
+    "🧠 7. SHAP Analizi",
 ])
 
 
 # ------------------------------------------
-# TAB 1: LİTERATÜR VERİ SETLERİ (Hızlandırılmış ve Güncellenmiş)
+# TAB 1: LİTERATÜR VERİ SETLERİ
 # ------------------------------------------
 with tab1:
   st.subheader("📚 Literatürde Öne Çıkan Sokak Görünümü Veri Setleri")
-
-  # Metin, tablo ve seçim elemanlarını tam siyah ve yüksek kontrastlı yapan CSS
   st.markdown(
       """
         <style>
-        /* Tüm metinleri net siyah ve okunaklı yap */
-        .stMarkdown, p, span, label, li, h1, h2, h3, h4, h5, h6 {
-            color: #000000 !important;
-            font-weight: 500;
-        }
-        /* Tablo yazılarını tam siyah yap */
-        [data-testid="stDataFrame"] *, div[data-testid="stTable"] * {
-            color: #000000 !important;
-            font-weight: 600 !important;
-        }
-        /* Seçim butonlarını (pills) modern ve hızlı hale getir */
-        div[role="radiogroup"] {
-            flex-direction: row;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 15px;
-        }
-        div[role="radiogroup"] > label {
-            background-color: #E2E8F0 !important;
-            border: 1px solid #CBD5E1 !important;
-            padding: 8px 16px !important;
-            border-radius: 8px !important;
-            cursor: pointer !important;
-            font-weight: 600 !important;
-        }
-        div[role="radiogroup"] > label:hover {
-            background-color: #CBD5E1 !important;
-        }
-        div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child {
-            display: none; /* Yuvarlak radio ikonunu gizle, buton görünümü ver */
-        }
+        .stMarkdown, p, span, label, li, h1, h2, h3, h4, h5, h6 { color: #000000 !important; font-weight: 500; }
+        [data-testid="stDataFrame"] *, div[data-testid="stTable"] * { color: #000000 !important; font-weight: 600 !important; }
+        div[role="radiogroup"] { flex-direction: row; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        div[role="radiogroup"] > label { background-color: #E2E8F0 !important; border: 1px solid #CBD5E1 !important; padding: 8px 16px !important; border-radius: 8px !important; cursor: pointer !important; font-weight: 600 !important; }
+        div[role="radiogroup"] > label:hover { background-color: #CBD5E1 !important; }
+        div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child { display: none; }
         </style>
     """,
       unsafe_allow_html=True,
   )
 
-  # Tek tıkla anında yüklenen yatay buton dizilimi
   ds_option = st.radio(
       "Veri Seti Seçin:",
-      [
-          "Cityscapes",
-          "ADE20K",
-          "MS COCO & COCO-Stuff",
-          "PASCAL VOC",
-          "BDD100K",
-          "Mapillary Vistas",
-          "PASS, DensePASS & SynPASS",
-      ],
+      ["Cityscapes", "ADE20K", "MS COCO & COCO-Stuff", "PASCAL VOC", "BDD100K", "Mapillary Vistas", "PASS, DensePASS & SynPASS"],
       horizontal=True,
       label_visibility="collapsed",
   )
-
   st.markdown("---")
 
   if ds_option == "Cityscapes":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏙️ Cityscapes Veri Seti")
-      st.write(
-          "TU Darmstadt, Max Planck Enformatik Enstitüsü ve Daimler"
-          " tarafından otonom sürüş algısını geliştirmek amacıyla Almanya ve"
-          " çevresindeki 50 kentten toplanmıştır. 5.000 yüksek"
-          " hassasiyetli, 20.000 kaba etiketli perspektif görüntü içerir."
-          " Standardize değerlendirmede 19 semantik sınıf kullanılır."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Sabit perspektif kameralar kullanıldığından 360°"
-          " panoramik görüntülerdeki radyal distorsiyonları ve yan/arka çevre"
-          " bağlamını temsil edemez."
-      )
+      st.write("TU Darmstadt, Max Planck Enformatik Enstitüsü ve Daimler tarafından otonom sürüş algısını geliştirmek amacıyla Almanya ve çevresindeki 50 kentten toplanmıştır. 5.000 yüksek hassasiyetli, 20.000 kaba etiketli perspektif görüntü içerir. Standardize değerlendirmede 19 semantik sınıf kullanılır.")
+      st.info("💡 **Sınırlılık:** Sabit perspektif kameralar kullanıldığından 360° panoramik görüntülerdeki radyal distorsiyonları ve yan/arka çevre bağlamını temsil edemez.")
     with c2:
-      show_image(
-          "cityscapes_demo.png",
-          caption=(
-              "Şekil 1: Cityscapes Veri Seti Örnek Etiketli Görüntüleri"
-              " (Cordts vd., 2016)"
-          ),
-      )
+      show_image("cityscapes_demo.png", caption="Şekil 1: Cityscapes Veri Seti Örnek Etiketli Görüntüleri (Cordts vd., 2016)")
 
   elif ds_option == "ADE20K":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏛️ ADE20K Veri Seti")
-      st.write(
-          "MIT CSAIL tarafından geliştirilen ADE20K, iç ve dış mekanları bir"
-          " arada sunan en kapsamlı veri kaynaklarından biridir. Tam"
-          " sürümünde 3.169 sınıf bulunurken, standart kıyaslamada"
-          " SceneParse150 (150 sınıf) kullanılır."
-      )
-      st.markdown("""
-            * **SceneParse150:** 150 Sınıf | 20.210 Eğitim | 2.000 Doğrulama Görüntüsü
-            * **ADE20K Tam Sürüm:** 3.169 Sınıf | ~25.000+ Görüntü | Nesne-Parça Hiyerarşisi
-            """)
-      st.info(
-          "💡 **Sınırlılık:** Yüksek sınıf karmaşıklığı nedeniyle aşırı veri"
-          " dengesizliği (class imbalance) barındırır ve doğrudan kent içi sokak"
-          " perspektifine odaklanmamıştır."
-      )
+      st.write("MIT CSAIL tarafından geliştirilen ADE20K, iç ve dış mekanları bir arada sunan en kapsamlı veri kaynaklarından biridir. Tam sürümünde 3.169 sınıf bulunurken, standart kıyaslamada SceneParse150 (150 sınıf) kullanılır.")
+      st.markdown("* **SceneParse150:** 150 Sınıf | 20.210 Eğitim | 2.000 Doğrulama Görüntüsü\n* **ADE20K Tam Sürüm:** 3.169 Sınıf | ~25.000+ Görüntü | Nesne-Parça Hiyerarşisi")
+      st.info("💡 **Sınırlılık:** Yüksek sınıf karmaşıklığı nedeniyle aşırı veri dengesizliği (class imbalance) barındırır ve doğrudan kent içi sokak perspektifine odaklanmamıştır.")
     with c2:
-      show_image(
-          "ade20k_demo.png",
-          caption=(
-              "Şekil 2: ADE20K Veri Seti Örnek Segmentasyon Haritaları (Zhou"
-              " vd., 2017)"
-          ),
-      )
+      show_image("ade20k_demo.png", caption="Şekil 2: ADE20K Veri Seti Örnek Segmentasyon Haritaları (Zhou vd., 2017)")
 
   elif ds_option == "MS COCO & COCO-Stuff":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🖼️ MS COCO & COCO-Stuff")
-      st.write(
-          "Microsoft COCO, nesnelerin doğal çevreleri ve bağlamlarıyla"
-          " birlikte değerlendirilmesini amaçlar. 80 nesne sınıfına ek olarak"
-          " COCO-Stuff ile 91 arka plan sınıfı eklenerek toplam 171 sınıfa"
-          " ulaştırılmıştır."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Genel odaklı nesne sahnelerinden oluştuğu için"
-          " otonom sürüş ve kent mekânı geometrisine özgü dinamikleri doğrudan"
-          " modellemekte yetersiz kalır."
-      )
+      st.write("Microsoft COCO, nesnelerin doğal çevreleri ve bağlamlarıyla birlikte değerlendirilmesini amaçlar. 80 nesne sınıfına ek olarak COCO-Stuff ile 91 arka plan sınıfı eklenerek toplam 171 sınıfa ulaştırılmıştır.")
+      st.info("💡 **Sınırlılık:** Genel odaklı nesne sahnelerinden oluştuğu için otonom sürüş ve kent mekânı geometrisine özgü dinamikleri doğrudan modellemekte yetersiz kalır.")
     with c2:
-      show_image(
-          "mscoco_demo.png",
-          caption=(
-              "Şekil 3: MS COCO Veri Setinden Örnek Bağlamsal Etiketler"
-              " (Fleet vd., 2014)"
-          ),
-      )
+      show_image("mscoco_demo.png", caption="Şekil 3: MS COCO Veri Setinden Örnek Bağlamsal Etiketler (Fleet vd., 2014)")
 
   elif ds_option == "PASCAL VOC":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏷️ PASCAL VOC")
-      st.write(
-          "Erken dönem derin öğrenme (FCN, DeepLab) mimarilerinin gelişiminde"
-          " test alanı oluşturan tarihsel veri setidir. 20 nesne sınıfı içerir."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Kısıtlı sınıf sayısı (20 sınıf), düşük görüntü"
-          " çözünürlüğü ve kentsel alan karmaşıklığını tam yansıtamaması"
-          " nedeniyle güncel uygulamalarda yetersiz kalmaktadır."
-      )
+      st.write("Erken dönem derin öğrenme (FCN, DeepLab) mimarilerinin gelişiminde test alanı oluşturan tarihsel veri setidir. 20 nesne sınıfı içerir.")
+      st.info("💡 **Sınırlılık:** Kısıtlı sınıf sayısı (20 sınıf), düşük görüntü çözünürlüğü ve kentsel alan karmaşıklığını tam yansıtamaması nedeniyle güncel uygulamalarda yetersiz kalmaktadır.")
     with c2:
-      show_image(
-          "pascalvoc_demo.png",
-          caption=(
-              "Şekil 4: PASCAL VOC Segmentasyon ve Void Etiket Örnekleri"
-              " (Everingham vd., 2010)"
-          ),
-      )
+      show_image("pascalvoc_demo.png", caption="Şekil 4: PASCAL VOC Segmentasyon ve Void Etiket Örnekleri (Everingham vd., 2010)")
 
   elif ds_option == "BDD100K":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🚗 BDD100K Veri Seti")
-      st.write(
-          "Berkeley Deep Drive tarafından geliştirilen 100.000 sürüş videosu"
-          " içeren devasa veri kaynağıdır. Gece, sis, yağmur ve kar gibi"
-          " olumsuz çevre koşullarında model dayanıklılığını ölçmek için"
-          " kullanılır."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Standart araç ön camı (perspektif) açılarıyla"
-          " sınırlı olduğundan 360° kesintisiz çevresel görüş ve mekânsal alan"
-          " analizlerini kapsayamaz."
-      )
+      st.write("Berkeley Deep Drive tarafından geliştirilen 100.000 sürüş videosu içeren devasa veri kaynağıdır. Gece, sis, yağmur ve kar gibi olumsuz çevre koşullarında model dayanıklılığını ölçmek için kullanılır.")
+      st.info("💡 **Sınırlılık:** Standart araç ön camı (perspektif) açılarıyla sınırlı olduğundan 360° kesintisiz çevresel görüş ve mekânsal alan analizlerini kapsayamaz.")
     with c2:
-      show_image(
-          "bdd100k_demo.png",
-          caption=(
-              "Şekil 5: BDD100K Farklı Hava ve Zaman Koşulları Sürüş Kareleri"
-              " (Yu vd., 2020)"
-          ),
-      )
+      show_image("bdd100k_demo.png", caption="Şekil 5: BDD100K Farklı Hava ve Zaman Koşulları Sürüş Kareleri (Yu vd., 2020)")
 
   elif ds_option == "Mapillary Vistas":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🌐 Mapillary Vistas")
-      st.write(
-          "6 kıtadan kitle kaynaklı toplanan 25.000 yüksek çözünürlüklü görüntü"
-          " ve 66 semantik sınıf içerir. Farklı sensör ve kameralardan"
-          " toplandığı için oldukça heterojendir."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Farklı mobil cihazlardan kitle kaynaklı"
-          " toplanması nedeniyle görüntü kalitesi, çekim yüksekliği ve"
-          " aydınlatma standartlarında belirgin tutarsızlıklar görülür."
-      )
+      st.write("6 kıtadan kitle kaynaklı toplanan 25.000 yüksek çözünürlüklü görüntü ve 66 semantik sınıf içerir. Farklı sensör ve kameralardan toplandığı için oldukça heterojendir.")
+      st.info("💡 **Sınırlılık:** Farklı mobil cihazlardan kitle kaynaklı toplanması nedeniyle görüntü kalitesi, çekim yüksekliği ve aydınlatma standartlarında belirgin tutarsızlıklar görülür.")
     with c2:
-      show_image(
-          "mapillary_vistas_demo.png",
-          caption=(
-              "Şekil 6: Mapillary Vistas Kitle Kaynaklı Etiket Örnekleri"
-              " (Neuhold vd., 2017)"
-          ),
-      )
+      show_image("mapillary_vistas_demo.png", caption="Şekil 6: Mapillary Vistas Kitle Kaynaklı Etiket Örnekleri (Neuhold vd., 2017)")
 
   elif ds_option == "PASS, DensePASS & SynPASS":
     c1, c2 = st.columns(2)
     with c1:
       st.markdown("#### 🔄 DensePASS (Panoramik Aktarım)")
-      st.write(
-          "Perspektif etiketlerin matematiksel projeksiyonla panoramik düzleme"
-          " aktarıldığı veri setidir. Projeksiyon hataları ve üst/alt"
-          " distorsiyonlar içerir."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Dönüşüm esnasında kutup bölgelerinde oluşan"
-          " matematiksel bükülmeler ve piksel bozulmaları etiket kaymalarına yol"
-          " açabilir."
-      )
-      show_image(
-          "densepass_demo.png",
-          caption=(
-              "Şekil 7: DensePASS Panoramik Segmentasyon Aktarımı (Ma vd.,"
-              " 2021)"
-          ),
-      )
+      st.write("Perspektif etiketlerin matematiksel projeksiyonla panoramik düzleme aktarıldığı veri setidir. Projeksiyon hataları ve üst/alt distorsiyonlar içerir.")
+      st.info("💡 **Sınırlılık:** Dönüşüm esnasında kutup bölgelerinde oluşan matematiksel bükülmeler ve piksel bozulmaları etiket kaymalarına yol açabilir.")
+      show_image("densepass_demo.png", caption="Şekil 7: DensePASS Panoramik Segmentasyon Aktarımı (Ma vd., 2021)")
     with c2:
       st.markdown("#### 🎮 SynPASS (Sentetik Panoramik)")
-      st.write(
-          "Sanal motorlar üzerinde 9.080 sentetik panoramik görüntü ve"
-          " kusursuz etiketler üretilmiştir. Sentetik-gerçek alan kayması"
-          " bulunmaktadır."
-      )
-      st.info(
-          "💡 **Sınırlılık:** Oyun/simülasyon motoru çıktısı olduğundan gerçek"
-          " dünya dokuları, ışık kırılmaları ve karmaşık hava koşulları ile"
-          " arasında sentetik-gerçek (domain gap) farkı bulunur."
-      )
-      show_image(
-          "synpass_demo.png",
-          caption=(
-              "Şekil 8: SynPASS Sentetik Panoramik Segmentasyon (Zhang vd.,"
-              " 2024)"
-          ),
-      )
+      st.write("Sanal motorlar üzerinde 9.080 sentetik panoramik görüntü ve kusursuz etiketler üretilmiştir. Sentetik-gerçek alan kayması bulunmaktadır.")
+      st.info("💡 **Sınırlılık:** Oyun/simülasyon motoru çıktısı olduğundan gerçek dünya dokuları, ışık kırılmaları ve karmaşık hava koşulları ile arasında sentetik-gerçek (domain gap) farkı bulunur.")
+      show_image("synpass_demo.png", caption="Şekil 8: SynPASS Sentetik Panoramik Segmentasyon (Zhang vd., 2024)")
 
 
 # ------------------------------------------
@@ -902,39 +425,19 @@ with tab1:
 # ------------------------------------------
 with tab2:
   st.subheader("🗺️ Mersin Saha Arazi Çalışmaları & Veri Toplama Protokolü")
-
   col_left, col_right = st.columns([1, 1])
-
   with col_left:
     st.markdown("### 📷 Görüntüleme Donanımı & Yöntem")
-    st.write(
-        "Saha çekimlerinde **GoPro Max 360** aksiyon kamerası kullanılmıştır"
-        " 5760 × 2880 piksel (16 MP) çözünürlükte 360° panoramik"
-        " görüntüler insan göz hizasında sabitlenerek toplanmıştır."
-    )
-
+    st.write("Saha çekimlerinde **GoPro Max 360** aksiyon kamerası kullanılmıştır. 5760 × 2880 piksel (16 MP) çözünürlükte 360° panoramik görüntüler insan göz hizasında sabitlenerek toplanmıştır.")
     st.markdown("#### Yaya ve Motosiklet Çekim Düzenekleri")
     sub_c1, sub_c2 = st.columns(2)
     with sub_c1:
-      show_image(
-          "goruntu_eldesi_duzenegi.png",
-          caption="Yaya Saha Çalışması Düzeneği",
-      )
+      show_image("goruntu_eldesi_duzenegi.png", caption="Yaya Saha Çalışması Düzeneği")
     with sub_c2:
-      show_image(
-          "motorsiklet.png",
-          caption="Ana Arter Motosiklet Düzeneği",
-      )
-
+      show_image("motorsiklet.png", caption="Ana Arter Motosiklet Düzeneği")
   with col_right:
     st.markdown("### 📍 GPS Konumlandırma & GIS Üretimi")
-    st.write(
-        "Çekim sırasında akıllı telefon GPS entegrasyonuyla EXIF"
-        " metaverilerine koordinatlar işlenmiştir. GPS sinyalinin"
-        " bozulduğu 118 görüntü **GeoSetter** yazılımı ile manuel"
-        " konumlandırılmıştır."
-    )
-
+    st.write("Çekim sırasında akıllı telefon GPS entegrasyonuyla EXIF metaverilerine koordinatlar işlenmiştir. GPS sinyalinin bozulduğu 118 görüntü **GeoSetter** yazılımı ile manuel konumlandırılmıştır.")
     sub_g1, sub_g2 = st.columns(2)
     with sub_g1:
       show_image("metaveri.png", caption="Görüntü GPS Metaverisi")
@@ -942,40 +445,24 @@ with tab2:
       show_image("geosetter.png", caption="GeoSetter Konum Düzeltme")
 
   st.divider()
-
   st.markdown("### 📅 Arazi Çalışmaları Dağılım Tablosu (13 Saha Seferi)")
   st.dataframe(df_arazi, use_container_width=True)
-
+  
   st.divider()
-
   st.markdown("### 🌍 Konumsal Dağılım, Mevsimsellik & Mesafe Analizleri")
-  r1, r2= st.columns(2)
+  r1, r2 = st.columns(2)
   with r1:
-    show_image(
-        "goruntu_alim_tarihleri_konumsal_dagilim.png",
-        caption="SVI Görüntülerinin Konumsal Haritası",
-    )
+    show_image("goruntu_alim_tarihleri_konumsal_dagilim.png", caption="SVI Görüntülerinin Konumsal Haritası")
   with r2:
-    show_image(
-        "seasonal_distribution.png",
-        caption="Mevsimsel Örnekleme Dağılımı",
-    )
-
+    show_image("seasonal_distribution.png", caption="Mevsimsel Örnekleme Dağılımı")
 
   st.divider()
-
   st.markdown("### 🌐 Mapillary Açık Erişim Platformu Entegrasyonu")
   m1_col, m2_col = st.columns(2)
   with m1_col:
-    show_image(
-        "mapillary_account.png",
-        caption="PalmCity Mapillary Hesap Portalı",
-    )
+    show_image("mapillary_account.png", caption="PalmCity Mapillary Hesap Portalı")
   with m2_col:
-    show_image(
-        "mapillary_navigation.png",
-        caption="Mapillary 360° İnteraktif Navigasyon Arayüzü",
-    )
+    show_image("mapillary_navigation.png", caption="Mapillary 360° İnteraktif Navigasyon Arayüzü")
 
 
 # ------------------------------------------
@@ -983,143 +470,75 @@ with tab2:
 # ------------------------------------------
 with tab3:
   st.subheader("🏙️ Mersin Kent Merkezi Kentsel ve Mimari Tipolojileri")
-  st.write(
-      "PalmCity veri seti, Mersin kent dokusunu temsil eden 5 temel kentsel"
-      " tipolojiyi kapsar:"
-  )
-
-  t_gallery = st.radio(
-      "İncelemek İstediğiniz Tipolojiyi Seçin:",
-      [
-          "Çarşı (Bazaar)",
-          "Planlı Rezidans",
-          "Planlı Apartman",
-          "Plansız Yerleşim",
-          "Sahil",
-      ],
-      horizontal=True,
-  )
+  st.write("PalmCity veri seti, Mersin kent dokusunu temsil eden 5 temel kentsel tipolojiyi kapsar:")
+  t_gallery = st.radio("İncelemek İstediğiniz Tipolojiyi Seçin:", ["Çarşı (Bazaar)", "Planlı Rezidans", "Planlı Apartman", "Plansız Yerleşim", "Sahil"], horizontal=True)
 
   if t_gallery == "Çarşı (Bazaar)":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏪 Çarşı Tipolojisi")
-      st.write(
-          "Ticarethanelerin, tabela yoğunluğunun, yaya hareketliliğinin ve dar"
-          " sokakların hakim olduğu kentsel alanlardır."
-      )
+      st.write("Ticarethanelerin, tabela yoğunluğunun, yaya hareketliliğinin ve dar sokakların hakim olduğu kentsel alanlardır.")
     with c2:
-      show_image(
-          "bazaar_typology.png", caption="Çarşı Tipolojisi SVI Örneği"
-      )
+      show_image("bazaar_typology.png", caption="Çarşı Tipolojisi SVI Örneği")
 
   elif t_gallery == "Planlı Rezidans":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏢 Planlı Rezidans Tipolojisi")
-      st.write(
-          "Yüksek katlı modern yapılar, düzenli peyzaj, geniş yollar ve açık"
-          " otopark alanlarını barındıran tipolojidir."
-      )
+      st.write("Yüksek katlı modern yapılar, düzenli peyzaj, geniş yollar ve açık otopark alanlarını barındıran tipolojidir.")
     with c2:
-      show_image(
-          "planned_residential_typology.png",
-          caption="Planlı Rezidans Tipolojisi Örneği",
-      )
+      show_image("planned_residential_typology.png", caption="Planlı Rezidans Tipolojisi Örneği")
 
   elif t_gallery == "Planlı Apartman":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏙️ Planlı Apartman Tipolojisi")
-      st.write(
-          "Orta-yüksek katlı konut blokları, kaldırımlar, düzenli sokak"
-          " ızgarası ve dikili kent ağaçlarını içerir."
-      )
+      st.write("Orta-yüksek katlı konut blokları, kaldırımlar, düzenli sokak ızgarası ve dikili kent ağaçlarını içerir.")
     with c2:
-      show_image(
-          "planned_apartment_typology.png",
-          caption="Planlı Apartman Tipolojisi Örneği",
-      )
+      show_image("planned_apartment_typology.png", caption="Planlı Apartman Tipolojisi Örneği")
 
   elif t_gallery == "Plansız Yerleşim":
     c1, c2 = st.columns([1, 1])
     with c1:
-      st.markdown("### 🏚️ Plansız Yerleşim Tipolojisi")
-      st.write(
-          "Düşük katlı, düzensiz yapılaşma, dar sokaklar, karmaşık kablo ve"
-          " altyapı elemanlarının öne çıktığı alanlardır."
-      )
+      st.markdown("### 🏚️️ Plansız Yerleşim Tipolojisi")
+      st.write("Düşük katlı, düzensiz yapılaşma, dar sokaklar, karmaşık kablo ve altyapı elemanlarının öne çıktığı alanlardır.")
     with c2:
-      show_image(
-          "unplanned_typology.png",
-          caption="Plansız Yerleşim Tipolojisi Örneği",
-      )
+      show_image("unplanned_typology.png", caption="Plansız Yerleşim Tipolojisi Örneği")
 
   elif t_gallery == "Sahil":
     c1, c2 = st.columns([1, 1])
     with c1:
       st.markdown("### 🏖️ Sahil Tipolojisi")
-      st.write(
-          "Deniz yüzeyi, geniş yürüyüş yolları, palmiye ağaçları ve açık ufuk"
-          " çizgisinin egemen olduğu kıyı şerididir."
-      )
+      st.write("Deniz yüzeyi, geniş yürüyüş yolları, palmiye ağaçları ve açık ufuk çizgisinin egemen olduğu kıyı şerididir.")
     with c2:
-      show_image(
-          "coastal_typology.png", caption="Sahil Tipolojisi Örneği"
-      )
+      show_image("coastal_typology.png", caption="Sahil Tipolojisi Örneği")
 
   st.divider()
-
   st.markdown("### 📊 Tipoloji Dağılım Grafikleri & İlçe/Mahalle Analizleri")
   g1, g2 = st.columns(2)
   with g1:
-    show_image(
-        "typology_distribution.png",
-        caption="Genel Tipoloji Oranları",
-    )
-    show_image(
-        "typology_district_distribution.png",
-        caption="İlçelere Göre Tipoloji Dağılımı",
-    )
+    show_image("typology_distribution.png", caption="Genel Tipoloji Oranları")
+    show_image("typology_district_distribution.png", caption="İlçelere Göre Tipoloji Dağılımı")
   with g2:
-    show_image(
-        "typology_spatial_distribution.png",
-        caption="Tipolojilerin Konumsal Haritası",
-    )
-    show_image(
-        "typology_neighborhood_distribution.png",
-        caption="Mahallelere Göre Tipoloji Kırılımı",
-    )
+    show_image("typology_spatial_distribution.png", caption="Tipolojilerin Konumsal Haritası")
+    show_image("typology_neighborhood_distribution.png", caption="Mahallelere Göre Tipoloji Kırılımı")
 
 
 # ------------------------------------------
 # TAB 4: PALMCITY SEMANTİK ETİKETLEME
 # ------------------------------------------
-
 with tab4:
   st.subheader("🏷️ PalmCity Semantik Etiketleme Protokolü & Sınıf Hiyerarşisi")
-  st.write(
-      "Etiketlemeler **Supervisely** platformu üzerinde poligon tabanlı piksel"
-      " düzeyinde manuel olarak gerçekleştirilmiştir. 830 panoramik"
-      " görüntü üzerinde 32 semantik sınıf tanımlanmıştır."
-  )
-
+  st.write("Etiketlemeler **Supervisely** platformu üzerinde poligon tabanlı piksel düzeyinde manuel olarak gerçekleştirilmiştir. 830 panoramik görüntü üzerinde 32 semantik sınıf tanımlanmıştır.")
   st.markdown("### 🎨 32 Semantik Sınıf ve Renk Paleti Matrisi")
 
-  # İnteraktif Sınıf Arama Filtresi
-  search_term = st.text_input(
-      "🔍 Sınıf Ara (Örn: Road, Bina, Yaya, Sky...):", ""
-  )
-
+  search_term = st.text_input("🔍 Sınıf Ara (Örn: Road, Bina, Yaya, Sky...):", "")
   filtered_df = df_classes[
-      df_classes["İngilizce Ad"]
-      .str.contains(search_term, case=False)
+      df_classes["İngilizce Ad"].str.contains(search_term, case=False)
       | df_classes["Türkçe Ad"].str.contains(search_term, case=False)
       | df_classes["Kategori"].str.contains(search_term, case=False)
   ]
   
-
-  # Renk Rozetleri Görünümü
   cols = st.columns(4)
   for idx, row in filtered_df.reset_index().iterrows():
     col_target = cols[idx % 4]
@@ -1144,12 +563,10 @@ with tab4:
 
 
 # ------------------------------------------
-# TAB 5: İSTATİSTİK & ANALİZ PANELİ (Görsel Odaklı)
+# TAB 5: İSTATİSTİK & ANALİZ PANELİ
 # ------------------------------------------
 with tab5:
     st.subheader("📊 Etkileşimli İstatistik ve Veri Analizi Paneli (Görseller)")
-
-    # 2x2 görsel ızgarası
     st.markdown("#### 📌 Labelled Görsel Özetleri")
     grid_cols = st.columns(2)
     img_names_2x2 = [
@@ -1158,7 +575,6 @@ with tab5:
         "Labelled_Image_Typology (1).png",
         "Labelled_Image_Seasons (1).png",
     ]
-    # Render 2x2
     for idx, img_name in enumerate(img_names_2x2):
         col = grid_cols[idx % 2]
         with col:
@@ -1166,32 +582,268 @@ with tab5:
             show_image(img_name, caption=caption, use_container_width=True)
 
     st.markdown("---")
-
-    # Tek sütun: Labelled_Pixel_Counts
     st.markdown("#### 📈 Piksel Dağılımı / Labelled Pixel Counts")
     show_image("Labelled_Pixel_Counts (1).png", caption="Labelled Pixel Counts", use_container_width=True)
 
     st.markdown("---")
-
-    # Tek sütun: Labelled_Pixel_Counts
     st.markdown("#### 🖼️ Örnek Etiketlenmiş Görüntüler")
     show_image("etiket_ornekleri.png", caption="Etiketlenmiş Örnek Görüntüler", use_container_width=True)
-
     
     st.markdown("---")
-    # İsteğe bağlı: mevcut istatistik kartlarını koru (kısa özet)
     s1, s2, s3 = st.columns(3)
     s1.metric("Toplam Çekimi Yapılan Panoramik SVI", int(df_arazi["Görüntü Sayısı"].sum()))
     s2.metric("Toplam Semantik Sınıf", int(df_classes.shape[0]))
     s3.metric("Etiketli Panoramik SVI", "830")
 
+    st.markdown("---")
+    st.markdown("<div style='text-align: center; color: #888; font-size: 13px;'>PalmCity Veri Seti & Semantik Segmentasyon Projesi</div>", unsafe_allow_html=True)
+
+
+# ------------------------------------------
+# TAB 6: ÇEVRESEL İNDİSLER (YENİ SEKME)
+# ------------------------------------------
+with tab6:
+    st.subheader("📈 Çevresel İndisler ve Tipoloji İlişkisi")
+    
+    # Harita işlemleri için kütüphaneler
+    import geopandas as gpd
+    import contextily as cx
+    
+    # Harita ve geometri sütunu için .gpkg dosyasını oku
+    file_path_gpkg = "files/gdf5_final.gpkg"
+    
+    if os.path.exists(file_path_gpkg):
+        gdf_idx = gpd.read_file(file_path_gpkg)
+        
+        # Sizin belirttiğiniz Arazi Kullanımı (Land Use) Eşlemesi (4 Hariç)
+        land_use_mapping = {
+            0: "Market Areas Typology",
+            1: "Planned Residences Typology",
+            2: "Planned Apartments Typology",
+            3: "Informal Settlements Typology",
+            5: "Coastal Areas Typology"
+        }
+        
+        # Orijinal tipoloji sütununu bul (örneğin 'land_use' veya 'Tipoloji')
+        typology_col = next((col for col in gdf_idx.columns if "tipolo" in col.lower() or "land" in col.lower() or "kullan" in col.lower()), None)
+        
+        if typology_col:
+            # Eşlemeyi uygula ve 'land_use_name' adında yeni sütun oluştur
+            gdf_idx['land_use_name'] = gdf_idx[typology_col].map(land_use_mapping)
+            
+            # Eşleşmeyenleri (örneğin 4. sınıf veya NaN değerleri) veriden çıkar
+            gdf_idx = gdf_idx.dropna(subset=['land_use_name'])
+            
+        index_cols = ["GVI", "SVF", "BVI", "IGVI", "FVEI", "SEI", "VTV", "WVI"]
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.info("Bu panelde temel kentsel indislerin istatistiksel dağılımları ve haritaları incelenebilmektedir.")
+            selected_index = st.selectbox("📊 İncelemek istediğiniz indisi seçin:", index_cols)
+        
+        if typology_col and selected_index in gdf_idx.columns:
+            st.markdown("---")
+            c1, c2 = st.columns([1, 1])
+            
+            with c1:
+                # SOL TARAF: Güncellenmiş Land Use İsimleriyle Boxplot
+                fig_box = px.box(
+                    gdf_idx, 
+                    x='land_use_name', 
+                    y=selected_index, 
+                    color='land_use_name', 
+                    title=f"Kentsel Tipolojilere Göre {selected_index} Dağılımı",
+                    color_discrete_sequence=px.colors.qualitative.Dark2
+                )
+                fig_box.update_layout(
+                    xaxis_title="Arazi Kullanım Tipi", 
+                    yaxis_title=selected_index, 
+                    showlegend=False,
+                    xaxis={'categoryorder':'total descending'}
+                )
+                st.plotly_chart(fig_box, use_container_width=True)
+                
+            with c2:
+                # SAĞ TARAF: Geopandas & Contextily İle ESRI Haritası
+                st.markdown(f"<div style='text-align: center; font-weight: 600; font-size: 16px;'>📍 {selected_index} Değerlerinin Mekânsal Dağılımı</div>", unsafe_allow_html=True)
+                
+                # Contextily basemap'in düzgün oturması için CRS (Koordinat Sistemi) Web Mercator'a (EPSG:3857) dönüştürülmeli
+                if gdf_idx.crs is None:
+                    gdf_map = gdf_idx.set_crs(epsg=4326).to_crs(epsg=3857)
+                else:
+                    gdf_map = gdf_idx.to_crs(epsg=3857)
+                
+                # Matplotlib Figür Ayarları
+                fig, ax = plt.subplots(figsize=(8, 6), dpi=120)
+                
+                # Seçilen indis değerine göre (Quantiles) renklendirilmiş noktalar
+                gdf_map.plot(
+                    column=selected_index, 
+                    legend=True, 
+                    legend_kwds={'title': f'{selected_index} Değeri', 'loc': 'upper right', 'bbox_to_anchor': (1.2, 1)},
+                    ax=ax, 
+                    cmap='magma', 
+                    markersize=25, 
+                    scheme='quantiles', 
+                    k=5, 
+                    alpha=0.9, 
+                    edgecolor='black', 
+                    linewidth=0.4
+                )
+                
+                # ESRI World Imagery Uydu Görüntüsünü Ekle
+                cx.add_basemap(ax, source=cx.providers.Esri.WorldImagery)
+                
+                # Eksen kenarlıklarını ve koordinat sayılarını gizle
+                ax.set_axis_off()
+                
+                # Streamlit'e çizdir ve belleği temizle
+                st.pyplot(fig, use_container_width=True)
+                plt.clf()
+                
+        else:
+            st.warning("Seçilen indis veya Tipoloji sütunu veri setinde bulunamadı.")
+    else:
+        st.warning(f"⚠️ Harita çizimi için gerekli olan mekânsal veri dosyası bulunamadı: `{file_path_gpkg}`. Lütfen 'files' klasörü içinde olduğundan emin olun.")
+
+
+# ------------------------------------------
+# TAB 7: SHAP ANALİZİ & MODEL METRİKLERİ
+# ------------------------------------------
+with tab7:
+    import json
+    import io
+    import matplotlib.pyplot as plt
+    import shap
+    import numpy as np
+    import pandas as pd
+    import os
+    
+    st.subheader("🧠 Makine Öğrenmesi ile Sıcaklık Anomalisi SHAP Analizi")
+    st.write("Eğitilmiş modellerin (Random Forest, XGBoost, LightGBM) performans metriklerini ve mikro-çevre özelliklerinin sıcaklık anomalileri üzerindeki küresel etkilerini (SHAP) inceleyin.")
+    
+    # Kullanıcıdan mevsim seçimi
+    season = st.radio("Sezon Seçin:", ["summer", "winter", "spring", "autumn"], horizontal=True)
+    
+    # Kendi kodunuzda belirlediğiniz bağımsız değişkenler (Feature Names)
+    final_vars = ['GVI', 'Canyon_Ratio', 'IGVI', 'FVEI', 'SEI', 'VTV', 'WVI']
+    
+    st.markdown("---")
+    
+    # ==========================================
+    # 1. BÖLÜM: MODEL METRİKLERİ (JSON OKUMA)
+    # ==========================================
+    st.markdown(f"#### 📊 {season.capitalize()} Mevsimi - Model Performans Metrikleri")
+    
+    season_dir = f"files/anomaly_{season}_temp"
+    metrics_list = []
+    
+    if os.path.exists(season_dir):
+        for model_name in ["randomforest", "xgboost", "lightgbm"]:
+            json_path = os.path.join(season_dir, f"{model_name}.json")
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        m_data = json.load(f)
+                    
+                    def get_metric(data, metric_names):
+                        for k, v in data.items():
+                            if k.lower() in metric_names:
+                                return v
+                            if isinstance(v, dict):
+                                res = get_metric(v, metric_names)
+                                if res is not None: return res
+                        return None
+                    
+                    r2 = get_metric(m_data, ['test_r2', 'r2', 'r2_score'])
+                    rmse = get_metric(m_data, ['test_rmse', 'rmse', 'root_mean_squared_error'])
+                    mae = get_metric(m_data, ['test_mae', 'mae', 'mean_absolute_error'])
+                    
+                    metrics_list.append({
+                        "Model": "XGBoost" if model_name == "xgboost" else ("LightGBM" if model_name == "lightgbm" else "Random Forest"),
+                        "R2": f"{r2*100:.2f}%" if r2 else "-",
+                        "RMSE": f"{float(rmse):.2f}" if rmse else "-",
+                        "MAE": f"{float(mae):.2f}" if mae else "-"
+                    })
+                except Exception as e:
+                    pass
+    
+    if metrics_list:
+        df_results = pd.DataFrame(metrics_list)
+        st.dataframe(df_results, use_container_width=True)
+    else:
+        st.info(f"Modellerin değerlendirme metrikleri bulunamadı. (Beklenen dizin: `{season_dir}/`)")
 
     st.markdown("---")
-    st.markdown(
-        "<div style='text-align: center; color: #888; font-size: 13px;'>PalmCity Veri Seti & Semantik Segmentasyon Projesi</div>",
-        unsafe_allow_html=True,
-    )
 
+    # ==========================================
+    # 2. BÖLÜM: SHAP GRAFİKLERİ (.npz OKUMA)
+    # ==========================================
+    npz_path = f"files/anomaly_{season}_temp.npz"
+    
+    if os.path.exists(npz_path):
+        try:
+            data = np.load(npz_path, allow_pickle=True)
+            
+            sv = None
+            for k in ['shap_values', 'values', 'shap']:
+                if k in data.files:
+                    sv = data[k]
+                    break
+            
+            features = None
+            for k in data.files:
+                if k not in ['shap_values', 'values', 'shap', 'base_values']:
+                    if sv is not None and data[k].shape == sv.shape:
+                        features = data[k]
+                        break
+            
+            if sv is not None:
+                c1, c2 = st.columns(2)
+                
+                with c1:
+                    st.markdown(f"<div style='text-align: center; font-weight: 600;'>📊 Özellik Önem Sıralaması (Bar Plot)</div>", unsafe_allow_html=True)
+                    plt.figure(figsize=(8, 6), dpi=120)
+                    shap.summary_plot(sv, features=features, feature_names=final_vars, plot_type="bar", show=False)
+                    
+                    fig_bar = plt.gcf()
+                    buf_bar = io.BytesIO()
+                    fig_bar.savefig(buf_bar, format="png", bbox_inches="tight", dpi=150)
+                    st.image(buf_bar, use_container_width=True)
+                    plt.clf()
 
+                with c2:
+                    st.markdown(f"<div style='text-align: center; font-weight: 600;'>🐝 Yönlü SHAP Etki Grafiği (Dot Plot)</div>", unsafe_allow_html=True)
+                    plt.figure(figsize=(8, 6), dpi=120)
+                    shap.summary_plot(sv, features=features, feature_names=final_vars, show=False)
+                    
+                    fig_dot = plt.gcf()
+                    buf_dot = io.BytesIO()
+                    fig_dot.savefig(buf_dot, format="png", bbox_inches="tight", dpi=150)
+                    st.image(buf_dot, use_container_width=True)
+                    plt.clf()
+                    
+                    if features is None:
+                        st.warning("⚠️ `.npz` dosyasında özellik (X_test) değerleri bulunamadı. Renklendirmenin (Colorbar) çalışması için SHAP hesaplanırken girdi özelliklerinin de kaydedilmiş olması gerekir.")
+                
+                st.info("""
+                💡 **Grafik Okuma Rehberi:**
+                - **Bar Plot:** Kentsel indislerin (değişkenlerin) model üzerindeki mutlak önemini ve katkı payını sıralar.
+                - **Dot Plot (Beeswarm):** Yatay eksende değişkenin sıcaklık anomalisi (Delta T) üzerindeki pozitif veya negatif etkisini gösterir. Noktaların rengi ise özelliğin kendi sayısal değerini temsil eder (Kırmızı: Yüksek değer, Mavi: Düşük değer).
 
-
+                📌 **Kentsel İndis Sözlüğü:**
+                - **GVI:** Yeşil Görünüm İndeksi *(Green View Index)*
+                - **Canyon_Ratio:** Kanyon Oranı *(Bina Görünüm İndeksi / Gökyüzü Görünüm Faktörü)*
+                - **IGVI:** Geçirimsiz Zemin Görünüm İndeksi *(Impervious Ground View Index)*
+                - **FVEI:** Cephe Dikey Kapanma İndeksi *(Frontage Vertical Enclosure Index)*
+                - **SEI:** Sokak Kapanma İndeksi *(Street Enclosure Index)*
+                - **VTV:** Görsel Trafik Hacmi *(Visual Traffic Volume)*
+                - **WVI:** Su Görünüm İndeksi *(Water View Index)*
+                """)
+            else:
+                st.error("NPZ dosyası başarıyla okundu ancak içinde geçerli SHAP matrisi bulunamadı.")
+                
+        except Exception as e:
+            st.error(f"SHAP analiz verisi çizilirken bir hata oluştu: {e}")
+    else:
+        st.warning(f"⚠️ SHAP önbellek dosyası bulunamadı: `{npz_path}`. Lütfen modelleme çıktılarınızın bu dizinde bulunduğundan emin olun.")

@@ -1,0 +1,20 @@
+{
+  "target": "anomaly_winter_temp",
+  "feature_set": "seasonal_holdout",
+  "model_name": "XGBoost",
+  "model_checksum": "07b4fbbd5e8b082ae53ee823e69e79c960b11f5b15c4be8e03fd60d7dc3a4ef1",
+  "training_fingerprint": "32b0e8a2b74fcfe8d3d6adba787ae92adb5d878755b6ddd7da01e064cb8f32f6",
+  "row_count": 1305,
+  "feature_count": 7,
+  "feature_names": [
+    "GVI",
+    "Canyon_Ratio",
+    "IGVI",
+    "FVEI",
+    "SEI",
+    "VTV",
+    "WVI"
+  ],
+  "cache_file": "C:\\Users\\palmc\\Desktop\\LST_Study_PalmCity\\analysis\\modeling\\explainability\\cache\\32b0e8a2b74f_20260930T070140Z\\seasonal\\anomaly_winter_temp.npz",
+  "explanation_method": "SHAP TreeExplainer; tree-path-dependent background"
+}

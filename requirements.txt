@@ -1,5 +1,12 @@
 streamlit
 Pillow
 pandas
+numpy
 plotly
+matplotlib
+geopandas
+contextily
+mapclassify
+shap
+openpyxl
 markdown2
