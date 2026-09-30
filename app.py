@@ -1,4 +1,13 @@
 import os
+import glob
+import re
+import pandas as pd
+import plotly.express as px
+from PIL import Image
+import streamlit as st
+import os
+import glob
+import re
 import pandas as pd
 import plotly.express as px
 from PIL import Image
@@ -10,8 +19,7 @@ import streamlit as st
 st.set_page_config(
     page_title="PalmCity SVI & Semantik Segmentasyon Sunumu",
     page_icon="🌴",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
 # Sunum Kartları ve Modern Temalama İçin Özel CSS
