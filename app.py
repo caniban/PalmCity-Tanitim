@@ -995,7 +995,7 @@ with tab3:
           "Planlı Rezidans",
           "Planlı Apartman",
           "Plansız Yerleşim",
-          "Sahil (Coastal)",
+          "Sahil",
       ],
       horizontal=True,
   )
