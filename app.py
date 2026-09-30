@@ -89,7 +89,47 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ==========================================
+# 1.5. VERİ ÖNBELLEKLEME (HIZLANDIRMA)
+# ==========================================
+@st.cache_data(show_spinner=False)
+def load_geodata(file_path):
+    """GeoPackage dosyasını okur, CRS dönüşümünü yapar ve bellekte tutar."""
+    import geopandas as gpd
+    if not os.path.exists(file_path):
+        return None, None, None
+        
+    gdf = gpd.read_file(file_path)
+    land_use_mapping = {
+        0: "Market Areas Typology", 1: "Planned Residences Typology",
+        2: "Planned Apartments Typology", 3: "Informal Settlements Typology",
+        5: "Coastal Areas Typology"
+    }
+    typology_col = next((col for col in gdf.columns if "tipolo" in col.lower() or "land" in col.lower() or "kullan" in col.lower()), None)
+    
+    if typology_col:
+        gdf['land_use_name'] = gdf[typology_col].map(land_use_mapping)
+        gdf = gdf.dropna(subset=['land_use_name'])
+        
+    # Ağır projeksiyon işlemini bir kere yapıp önbelleğe alıyoruz
+    if gdf.crs is None:
+        gdf = gdf.set_crs(epsg=4326)
+    gdf_map = gdf.to_crs(epsg=3857)
+    
+    return gdf, gdf_map, typology_col
 
+@st.cache_data(show_spinner=False)
+def load_shap_data(npz_path):
+    """SHAP .npz dosyasını okur ve matrisleri ayıklayıp bellekte tutar."""
+    import numpy as np
+    if not os.path.exists(npz_path):
+        return None, None
+        
+    data = np.load(npz_path, allow_pickle=True)
+    sv = next((data[k] for k in ['shap_values', 'values', 'shap'] if k in data.files), None)
+    features = next((data[k] for k in data.files if k not in ['shap_values', 'values', 'shap', 'base_values'] and sv is not None and data[k].shape == sv.shape), None)
+    
+    return sv, features
 # ==========================================
 # 2. YARDIMCI GÖRSEL YÜKLEME FONKSİYONU
 # ==========================================
@@ -604,36 +644,13 @@ with tab5:
 # ------------------------------------------
 with tab6:
     st.subheader("📈 Çevresel İndisler ve Tipoloji İlişkisi")
-    
-    # Harita işlemleri için kütüphaneler
-    import geopandas as gpd
     import contextily as cx
+    import matplotlib.pyplot as plt
     
-    # Harita ve geometri sütunu için .gpkg dosyasını oku
     file_path_gpkg = "files/gdf5_final.gpkg"
+    gdf_idx, gdf_map, typology_col = load_geodata(file_path_gpkg)
     
-    if os.path.exists(file_path_gpkg):
-        gdf_idx = gpd.read_file(file_path_gpkg)
-        
-        # Sizin belirttiğiniz Arazi Kullanımı (Land Use) Eşlemesi (4 Hariç)
-        land_use_mapping = {
-            0: "Market Areas Typology",
-            1: "Planned Residences Typology",
-            2: "Planned Apartments Typology",
-            3: "Informal Settlements Typology",
-            5: "Coastal Areas Typology"
-        }
-        
-        # Orijinal tipoloji sütununu bul (örneğin 'land_use' veya 'Tipoloji')
-        typology_col = next((col for col in gdf_idx.columns if "tipolo" in col.lower() or "land" in col.lower() or "kullan" in col.lower()), None)
-        
-        if typology_col:
-            # Eşlemeyi uygula ve 'land_use_name' adında yeni sütun oluştur
-            gdf_idx['land_use_name'] = gdf_idx[typology_col].map(land_use_mapping)
-            
-            # Eşleşmeyenleri (örneğin 4. sınıf veya NaN değerleri) veriden çıkar
-            gdf_idx = gdf_idx.dropna(subset=['land_use_name'])
-            
+    if gdf_idx is not None:
         index_cols = ["GVI", "SVF", "BVI", "IGVI", "FVEI", "SEI", "VTV", "WVI"]
         
         col1, col2 = st.columns([1, 2])
@@ -646,65 +663,36 @@ with tab6:
             c1, c2 = st.columns([1, 1])
             
             with c1:
-                # SOL TARAF: Güncellenmiş Land Use İsimleriyle Boxplot
                 fig_box = px.box(
-                    gdf_idx, 
-                    x='land_use_name', 
-                    y=selected_index, 
-                    color='land_use_name', 
+                    gdf_idx, x='land_use_name', y=selected_index, color='land_use_name', 
                     title=f"Kentsel Tipolojilere Göre {selected_index} Dağılımı",
                     color_discrete_sequence=px.colors.qualitative.Dark2
                 )
-                fig_box.update_layout(
-                    xaxis_title="Arazi Kullanım Tipi", 
-                    yaxis_title=selected_index, 
-                    showlegend=False,
-                    xaxis={'categoryorder':'total descending'}
-                )
+                fig_box.update_layout(xaxis_title="Arazi Kullanım Tipi", yaxis_title=selected_index, showlegend=False, xaxis={'categoryorder':'total descending'})
                 st.plotly_chart(fig_box, use_container_width=True)
                 
             with c2:
-                # SAĞ TARAF: Geopandas & Contextily İle ESRI Haritası
                 st.markdown(f"<div style='text-align: center; font-weight: 600; font-size: 16px;'>📍 {selected_index} Değerlerinin Mekânsal Dağılımı</div>", unsafe_allow_html=True)
                 
-                # Contextily basemap'in düzgün oturması için CRS (Koordinat Sistemi) Web Mercator'a (EPSG:3857) dönüştürülmeli
-                if gdf_idx.crs is None:
-                    gdf_map = gdf_idx.set_crs(epsg=4326).to_crs(epsg=3857)
-                else:
-                    gdf_map = gdf_idx.to_crs(epsg=3857)
+                # DPI 120'den 90'a çekilerek matplotlib çizim hızı artırıldı
+                fig, ax = plt.subplots(figsize=(8, 6), dpi=90)
                 
-                # Matplotlib Figür Ayarları
-                fig, ax = plt.subplots(figsize=(8, 6), dpi=120)
-                
-                # Seçilen indis değerine göre (Quantiles) renklendirilmiş noktalar
                 gdf_map.plot(
-                    column=selected_index, 
-                    legend=True, 
-                    legend_kwds={'title': f'{selected_index} Değeri', 'loc': 'upper right', 'bbox_to_anchor': (1.2, 1)},
-                    ax=ax, 
-                    cmap='magma', 
-                    markersize=25, 
-                    scheme='quantiles', 
-                    k=5, 
-                    alpha=0.9, 
-                    edgecolor='black', 
-                    linewidth=0.4
+                    column=selected_index, legend=True, 
+                    legend_kwds={'title': f'{selected_index}', 'loc': 'upper right', 'bbox_to_anchor': (1.2, 1)},
+                    ax=ax, cmap='magma', markersize=15, scheme='quantiles', k=5, alpha=0.9, edgecolor='none' # Kenarlık çizgisi (edgecolor) kaldırılarak render hızlandırıldı
                 )
                 
-                # ESRI World Imagery Uydu Görüntüsünü Ekle
-                cx.add_basemap(ax, source=cx.providers.Esri.WorldImagery)
+                # HIZLANDIRICI: zoom=14 parametresi ile çok fazla fayans (tile) indirilmesi engellenir
+                cx.add_basemap(ax, source=cx.providers.Esri.WorldImagery, zoom=14)
                 
-                # Eksen kenarlıklarını ve koordinat sayılarını gizle
                 ax.set_axis_off()
-                
-                # Streamlit'e çizdir ve belleği temizle
                 st.pyplot(fig, use_container_width=True)
                 plt.clf()
-                
         else:
-            st.warning("Seçilen indis veya Tipoloji sütunu veri setinde bulunamadı.")
+            st.warning("Seçilen indis veri setinde bulunamadı.")
     else:
-        st.warning(f"⚠️ Harita çizimi için gerekli olan mekânsal veri dosyası bulunamadı: `{file_path_gpkg}`. Lütfen 'files' klasörü içinde olduğundan emin olun.")
+        st.warning(f"⚠️ Mekânsal veri dosyası bulunamadı: `{file_path_gpkg}`.")
 
 
 # ------------------------------------------
@@ -715,26 +703,16 @@ with tab7:
     import io
     import matplotlib.pyplot as plt
     import shap
-    import numpy as np
-    import pandas as pd
-    import os
     
     st.subheader("🧠 Makine Öğrenmesi ile Sıcaklık Anomalisi SHAP Analizi")
     st.write("Eğitilmiş modellerin (Random Forest, XGBoost, LightGBM) performans metriklerini ve mikro-çevre özelliklerinin sıcaklık anomalileri üzerindeki küresel etkilerini (SHAP) inceleyin.")
     
-    # Kullanıcıdan mevsim seçimi
     season = st.radio("Sezon Seçin:", ["summer", "winter", "spring", "autumn"], horizontal=True)
-    
-    # Kendi kodunuzda belirlediğiniz bağımsız değişkenler (Feature Names)
     final_vars = ['GVI', 'Canyon_Ratio', 'IGVI', 'FVEI', 'SEI', 'VTV', 'WVI']
-    
     st.markdown("---")
     
-    # ==========================================
-    # 1. BÖLÜM: MODEL METRİKLERİ (JSON OKUMA)
-    # ==========================================
+    # 1. BÖLÜM: METRİKLER
     st.markdown(f"#### 📊 {season.capitalize()} Mevsimi - Model Performans Metrikleri")
-    
     season_dir = f"files/anomaly_{season}_temp"
     metrics_list = []
     
@@ -748,102 +726,69 @@ with tab7:
                     
                     def get_metric(data, metric_names):
                         for k, v in data.items():
-                            if k.lower() in metric_names:
-                                return v
+                            if k.lower() in metric_names: return v
                             if isinstance(v, dict):
                                 res = get_metric(v, metric_names)
                                 if res is not None: return res
                         return None
                     
-                    r2 = get_metric(m_data, ['test_r2', 'r2', 'r2_score'])
-                    rmse = get_metric(m_data, ['test_rmse', 'rmse', 'root_mean_squared_error'])
-                    mae = get_metric(m_data, ['test_mae', 'mae', 'mean_absolute_error'])
-                    
+                    r2, rmse, mae = get_metric(m_data, ['test_r2', 'r2', 'r2_score']), get_metric(m_data, ['test_rmse', 'rmse']), get_metric(m_data, ['test_mae', 'mae'])
                     metrics_list.append({
                         "Model": "XGBoost" if model_name == "xgboost" else ("LightGBM" if model_name == "lightgbm" else "Random Forest"),
-                        "R2": f"{r2*100:.2f}%" if r2 else "-",
-                        "RMSE": f"{float(rmse):.2f}" if rmse else "-",
-                        "MAE": f"{float(mae):.2f}" if mae else "-"
+                        "R2": f"{r2*100:.2f}%" if r2 else "-", "RMSE": f"{float(rmse):.2f}" if rmse else "-", "MAE": f"{float(mae):.2f}" if mae else "-"
                     })
-                except Exception as e:
-                    pass
+                except: pass
     
     if metrics_list:
-        df_results = pd.DataFrame(metrics_list)
-        st.dataframe(df_results, use_container_width=True)
+        st.dataframe(pd.DataFrame(metrics_list), use_container_width=True)
     else:
-        st.info(f"Modellerin değerlendirme metrikleri bulunamadı. (Beklenen dizin: `{season_dir}/`)")
+        st.info("Modellerin değerlendirme metrikleri bulunamadı.")
 
     st.markdown("---")
 
-    # ==========================================
-    # 2. BÖLÜM: SHAP GRAFİKLERİ (.npz OKUMA)
-    # ==========================================
+    # 2. BÖLÜM: SHAP GRAFİKLERİ
     npz_path = f"files/anomaly_{season}_temp.npz"
+    sv, features = load_shap_data(npz_path) # Önbellekten anında yüklenir
     
-    if os.path.exists(npz_path):
-        try:
-            data = np.load(npz_path, allow_pickle=True)
+    if sv is not None:
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            st.markdown("<div style='text-align: center; font-weight: 600;'>📊 Özellik Önem Sıralaması (Bar Plot)</div>", unsafe_allow_html=True)
+            plt.figure(figsize=(8, 5))
+            shap.summary_plot(sv, features=features, feature_names=final_vars, plot_type="bar", show=False)
             
-            sv = None
-            for k in ['shap_values', 'values', 'shap']:
-                if k in data.files:
-                    sv = data[k]
-                    break
-            
-            features = None
-            for k in data.files:
-                if k not in ['shap_values', 'values', 'shap', 'base_values']:
-                    if sv is not None and data[k].shape == sv.shape:
-                        features = data[k]
-                        break
-            
-            if sv is not None:
-                c1, c2 = st.columns(2)
-                
-                with c1:
-                    st.markdown(f"<div style='text-align: center; font-weight: 600;'>📊 Özellik Önem Sıralaması (Bar Plot)</div>", unsafe_allow_html=True)
-                    plt.figure(figsize=(8, 6), dpi=120)
-                    shap.summary_plot(sv, features=features, feature_names=final_vars, plot_type="bar", show=False)
-                    
-                    fig_bar = plt.gcf()
-                    buf_bar = io.BytesIO()
-                    fig_bar.savefig(buf_bar, format="png", bbox_inches="tight", dpi=150)
-                    st.image(buf_bar, use_container_width=True)
-                    plt.clf()
+            buf_bar = io.BytesIO()
+            plt.savefig(buf_bar, format="png", bbox_inches="tight", dpi=100) # DPI 100 ile çok hızlı render
+            st.image(buf_bar, use_container_width=True)
+            plt.close() # plt.clf() yerine memory leak önlemek için close() daha etkilidir
 
-                with c2:
-                    st.markdown(f"<div style='text-align: center; font-weight: 600;'>🐝 Yönlü SHAP Etki Grafiği (Dot Plot)</div>", unsafe_allow_html=True)
-                    plt.figure(figsize=(8, 6), dpi=120)
-                    shap.summary_plot(sv, features=features, feature_names=final_vars, show=False)
-                    
-                    fig_dot = plt.gcf()
-                    buf_dot = io.BytesIO()
-                    fig_dot.savefig(buf_dot, format="png", bbox_inches="tight", dpi=150)
-                    st.image(buf_dot, use_container_width=True)
-                    plt.clf()
-                    
-                    if features is None:
-                        st.warning("⚠️ `.npz` dosyasında özellik (X_test) değerleri bulunamadı. Renklendirmenin (Colorbar) çalışması için SHAP hesaplanırken girdi özelliklerinin de kaydedilmiş olması gerekir.")
-                
-                st.info("""
-                💡 **Grafik Okuma Rehberi:**
-                - **Bar Plot:** Kentsel indislerin (değişkenlerin) model üzerindeki mutlak önemini ve katkı payını sıralar.
-                - **Dot Plot (Beeswarm):** Yatay eksende değişkenin sıcaklık anomalisi (Delta T) üzerindeki pozitif veya negatif etkisini gösterir. Noktaların rengi ise özelliğin kendi sayısal değerini temsil eder (Kırmızı: Yüksek değer, Mavi: Düşük değer).
+        with c2:
+            st.markdown("<div style='text-align: center; font-weight: 600;'>🐝 Yönlü SHAP Etki Grafiği (Dot Plot)</div>", unsafe_allow_html=True)
+            plt.figure(figsize=(8, 5))
+            shap.summary_plot(sv, features=features, feature_names=final_vars, show=False)
+            
+            buf_dot = io.BytesIO()
+            plt.savefig(buf_dot, format="png", bbox_inches="tight", dpi=100)
+            st.image(buf_dot, use_container_width=True)
+            plt.close()
+            
+            if features is None:
+                st.warning("⚠️ Özellik (X_test) değerleri bulunamadığı için renk skalası eklenemedi.")
+        
+        st.info("""
+        💡 **Grafik Okuma Rehberi:**
+        - **Bar Plot:** Kentsel indislerin (değişkenlerin) model üzerindeki mutlak önemini ve katkı payını sıralar.
+        - **Dot Plot (Beeswarm):** Yatay eksende değişkenin sıcaklık anomalisi (Delta T) üzerindeki pozitif veya negatif etkisini gösterir. Noktaların rengi ise özelliğin kendi sayısal değerini temsil eder (Kırmızı: Yüksek değer, Mavi: Düşük değer).
 
-                📌 **Kentsel İndis Sözlüğü:**
-                - **GVI:** Yeşil Görünüm İndeksi *(Green View Index)*
-                - **Canyon_Ratio:** Kanyon Oranı *(Bina Görünüm İndeksi / Gökyüzü Görünüm Faktörü)*
-                - **IGVI:** Geçirimsiz Zemin Görünüm İndeksi *(Impervious Ground View Index)*
-                - **FVEI:** Cephe Dikey Kapanma İndeksi *(Frontage Vertical Enclosure Index)*
-                - **SEI:** Sokak Kapanma İndeksi *(Street Enclosure Index)*
-                - **VTV:** Görsel Trafik Hacmi *(Visual Traffic Volume)*
-                - **WVI:** Su Görünüm İndeksi *(Water View Index)*
-                """)
-            else:
-                st.error("NPZ dosyası başarıyla okundu ancak içinde geçerli SHAP matrisi bulunamadı.")
-                
-        except Exception as e:
-            st.error(f"SHAP analiz verisi çizilirken bir hata oluştu: {e}")
+        📌 **Kentsel İndis Sözlüğü:**
+        - **GVI:** Yeşil Görünüm İndeksi *(Green View Index)*
+        - **Canyon_Ratio:** Kanyon Oranı *(Bina Görünüm İndeksi / Gökyüzü Görünüm Faktörü)*
+        - **IGVI:** Geçirimsiz Zemin Görünüm İndeksi *(Impervious Ground View Index)*
+        - **FVEI:** Cephe Dikey Kapanma İndeksi *(Frontage Vertical Enclosure Index)*
+        - **SEI:** Sokak Kapanma İndeksi *(Street Enclosure Index)*
+        - **VTV:** Görsel Trafik Hacmi *(Visual Traffic Volume)*
+        - **WVI:** Su Görünüm İndeksi *(Water View Index)*
+        """)
     else:
-        st.warning(f"⚠️ SHAP önbellek dosyası bulunamadı: `{npz_path}`. Lütfen modelleme çıktılarınızın bu dizinde bulunduğundan emin olun.")
+        st.warning(f"⚠️ Geçerli SHAP verisi veya dosyası bulunamadı: `{npz_path}`")
