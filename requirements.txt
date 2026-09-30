@@ -1,5 +1,5 @@
 streamlit
-pillow
+Pillow
 pandas
 plotly
 markdown2
